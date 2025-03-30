@@ -18,10 +18,12 @@ $LOOP_DELAY_SECONDS = 60  # Normal delay between checks
 $GEOCODING_API = "https://nominatim.openstreetmap.org"
 $SUN_API = "https://api.sunrise-sunset.org"
 
+$InformationPreference = "Continue" # Wymusza wyświetlanie wszystkich komunikatów informacyjnych
+
 function Test-InternetConnection() {
   try {
     $null = Test-Connection -ComputerName "8.8.8.8" -Count 1 -ErrorAction Stop
-    Write-Output "[INFO] Internet connection confirmed."
+    Write-Information "[INFO] Internet connection confirmed."
     return $true
   } catch {
     Write-Warning "[WARNING] No internet connection detected. Retrying in $CHECK_INTERVAL_SECONDS seconds..."
@@ -33,7 +35,7 @@ function Get-GeocodingData {
   param ([string]$city)
 
   try {
-    Write-Output "[STATUS] Fetching coordinates for: $city"
+    Write-Information "[STATUS] Fetching coordinates for: $city"
     $response = Invoke-RestMethod -Uri "$GEOCODING_API/search?q=$city&format=json" -ErrorAction Stop
 
     if (-not $response) {
@@ -41,7 +43,7 @@ function Get-GeocodingData {
     }
 
     $firstResult = $response | Select-Object -First 1
-    Write-Output "[SUCCESS] Coordinates found: Lat=$($firstResult.lat), Lon=$($firstResult.lon)"
+    Write-Information "[SUCCESS] Coordinates found: Lat=$($firstResult.lat), Lon=$($firstResult.lon)"
     return $firstResult
   } catch {
     Write-Error "[API ERROR] GeoData fetch failed: $_"
@@ -53,14 +55,14 @@ function Get-SunsetSunriseData {
   param ([string]$lat, [string]$lon)
 
   try {
-    Write-Output "[STATUS] Fetching sunrise/sunset times for Lat=$lat, Lon=$lon"
+    Write-Information "[STATUS] Fetching sunrise/sunset times for Lat=$lat, Lon=$lon"
     $response = Invoke-RestMethod -Uri "$SUN_API/json?lat=$lat&lng=$lon&date=today" -ErrorAction Stop
 
     if ($response.status -ne "OK") {
       throw "[API ERROR] Status: $($response.status)"
     }
 
-    Write-Output "[SUCCESS] Sunrise: $($response.results.sunrise), Sunset: $($response.results.sunset)"
+    Write-Information "[SUCCESS] Sunrise: $($response.results.sunrise), Sunset: $($response.results.sunset)"
     return $response.results
   } catch {
     Write-Error "[API ERROR] SunsetSunrise fetch failed: $_"
@@ -86,7 +88,7 @@ function Set-WindowsTheme {
         return
       }
 
-      Write-Output "[THEME] Switching to LIGHT theme (daytime)"
+      Write-Information "[THEME] Switching to LIGHT theme (daytime)"
       Set-ItemProperty -Path $path -Name $apps -Value 1
       Set-ItemProperty -Path $path -Name $system -Value 1
     } else {
@@ -94,7 +96,7 @@ function Set-WindowsTheme {
         return
       }
 
-      Write-Output "[THEME] Switching to DARK theme (nighttime)"
+      Write-Information "[THEME] Switching to DARK theme (nighttime)"
       Set-ItemProperty -Path $path -Name $apps -Value 0
       Set-ItemProperty -Path $path -Name $system -Value 0
     }
@@ -110,21 +112,22 @@ $sunriseTime = $null
 $sunsetTime = $null
 
 # --- Main Loop ---
-Write-Output $startTime
-Write-Output "=== Starting Theme Switcher ==="
-Write-Output "City: $CITY | Check Interval: ${CHECK_INTERVAL_SECONDS}s"
+Write-Information $startTime
+Write-Information "=== Starting Theme Switcher ==="
+Write-Information "City: $CITY | Check Interval: ${CHECK_INTERVAL_SECONDS}s"
 
 while ($true) {
   $now = Get-Date
 
-  try {
+  if ($sunriseTime -and $sunsetTime) {
     if ($now -ge $sunsetTime -or $now -lt $sunriseTime) {
       Set-WindowsTheme -useLightTheme $false
     } else {
       Set-WindowsTheme -useLightTheme $true
     }
-  } catch {
-    Write-Error "[TIME ERROR] Failed to parse sunrise/sunset times: $_"
+
+    Start-Sleep -Seconds $LOOP_DELAY_SECONDS
+    continue
   }
 
   if ($first -or ($startTime.Year -lt $now.Year -or $startTime.DayOfYear -lt $now.DayOfYear)) {
