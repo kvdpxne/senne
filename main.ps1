@@ -51,6 +51,22 @@ function Get-GeocodingData {
   }
 }
 
+function Convert-UtcTimeToLocal {
+  param (
+    [string]$time
+  )
+
+  # Parse UTC time string (format like "7:23:45 AM") to DateTime
+  $utcTime = [DateTime]::ParseExact(
+    $time,
+    "h:mm:ss tt",
+    [System.Globalization.CultureInfo]::InvariantCulture
+  )
+
+  # Convert to local time zone
+  return $utcTime.ToLocalTime()
+}
+
 function Get-SunsetSunriseData {
   param ([string]$lat, [string]$lon)
 
@@ -62,8 +78,19 @@ function Get-SunsetSunriseData {
       throw "[API ERROR] Status: $($response.status)"
     }
 
-    Write-Information "[SUCCESS] Sunrise: $($response.results.sunrise), Sunset: $($response.results.sunset)"
-    return $response.results
+    # Convert UTC times to local time zone
+    $utcSunrise = Convert-UtcTimeToLocal -time $response.results.sunrise
+    $utcSunset = Convert-UtcTimeToLocal -time $response.results.sunset
+
+    $localSunrise = $utcSunrise.ToLocalTime()
+    $localSunset = $utcSunset.ToLocalTime()
+
+    Write-Information "[SUCCESS] Sunrise (local): $localSunrise, Sunset (local): $localSunset"
+
+    return @{
+      sunrise = $localSunrise
+      sunset = $localSunset
+    }
   } catch {
     Write-Error "[API ERROR] SunsetSunrise fetch failed: $_"
     return $null
