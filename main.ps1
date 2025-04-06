@@ -68,11 +68,14 @@ function Convert-UtcTimeToLocal {
 }
 
 function Get-SunsetSunriseData {
-  param ([string]$lat, [string]$lon)
+  param ([string]$lat, [string]$lon, [string]$dateTime)
 
   try {
     Write-Information "[STATUS] Fetching sunrise/sunset times for Lat=$lat, Lon=$lon"
-    $response = Invoke-RestMethod -Uri "$SUN_API/json?lat=$lat&lng=$lon&date=today" -ErrorAction Stop
+
+    $formattedDate = Get-Date -Format "yyyy-MM-dd" $dateTime
+    $url = "$SUN_API/json?lat=$lat&lng=$lon&date=$formattedDate"
+    $response = Invoke-RestMethod -Uri $url -ErrorAction Stop
 
     if ($response.status -ne "OK") {
       throw "[API ERROR] Status: $($response.status)"
@@ -129,49 +132,56 @@ function Set-WindowsTheme {
   }
 }
 
-$startTime = Get-Date
-$first = $true
+# The date when the script was started
+$start = Get-Date
 
-$sunriseTime = $null
-$sunsetTime = $null
+# The longitude and latitude of the defined city
+$longitude = $null
+$latitude = $null
+
+# The time of sunrise and sunset
+$sunrise = $null
+$sunset = $null
 
 # --- Main Loop ---
-Write-Information $startTime
+Write-Information $start
 Write-Information "=== Starting Theme Switcher ==="
 Write-Information "City: $CITY | Check Interval: ${CHECK_INTERVAL_SECONDS}s"
 
 while ($true) {
   $now = Get-Date
+  $before = $sunrise -and $sunset
 
-  if ($sunriseTime -and $sunsetTime) {
-    Set-WindowsTheme -useLightTheme ($now -ge $sunriseTime -and $now -lt $sunsetTime)
+  if ($before -and $now.DayOfYear -eq $start.DayOfYear -and $now.Year -eq $start.Year) {
+    Set-WindowsTheme -useLightTheme ($now -ge $sunrise -and $now -lt $sunset)
     Start-Sleep -Seconds $LOOP_DELAY_SECONDS
     continue
   }
 
-  if ($first -or ($startTime.Year -lt $now.Year -or $startTime.DayOfYear -lt $now.DayOfYear)) {
-    if (-not (Test-InternetConnection)) {
-      Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
-      continue
-    }
-
-    $geocodingData = Get-GeocodingData -city $CITY
-    if (-not $geocodingData) {
-      Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
-      continue
-    }
-
-    $sunData = Get-SunsetSunriseData -lat $geocodingData.lat -lon $geocodingData.lon
-    if (-not $sunData) {
-      Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
-      continue
-    }
-
-    $sunriseTime = $sunData.sunrise
-    $sunsetTime = $sunData.sunset
-
-    $first = $false
+  if (-not (Test-InternetConnection)) {
+    Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
+    continue
   }
 
-  Start-Sleep -Seconds $LOOP_DELAY_SECONDS
+  if (-not $longitude -or -not $latitude) {
+    $result = Get-GeocodingData -city $CITY
+    if (-not $result) {
+      Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
+      continue
+    }
+
+    $longitude = $result.lon
+    $latitude = $result.lat
+  }
+
+  $result = Get-SunsetSunriseData -lat $latitude -lon $longitude -date $now
+  if (-not $result) {
+    Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
+    continue
+  }
+
+  $sunrise = $result.sunrise
+  $sunset = $result.sunset
+
+  $start = $now
 }
