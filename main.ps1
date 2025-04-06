@@ -79,11 +79,8 @@ function Get-SunsetSunriseData {
     }
 
     # Convert UTC times to local time zone
-    $utcSunrise = Convert-UtcTimeToLocal -time $response.results.sunrise
-    $utcSunset = Convert-UtcTimeToLocal -time $response.results.sunset
-
-    $localSunrise = $utcSunrise.ToLocalTime()
-    $localSunset = $utcSunset.ToLocalTime()
+    $localSunrise = Convert-UtcTimeToLocal -time $response.results.sunrise
+    $localSunset = Convert-UtcTimeToLocal -time $response.results.sunset
 
     Write-Information "[SUCCESS] Sunrise (local): $localSunrise, Sunset (local): $localSunset"
 
@@ -147,12 +144,7 @@ while ($true) {
   $now = Get-Date
 
   if ($sunriseTime -and $sunsetTime) {
-    if ($now -ge $sunsetTime -or $now -lt $sunriseTime) {
-      Set-WindowsTheme -useLightTheme $false
-    } else {
-      Set-WindowsTheme -useLightTheme $true
-    }
-
+    Set-WindowsTheme -useLightTheme ($now -ge $sunriseTime -and $now -lt $sunsetTime)
     Start-Sleep -Seconds $LOOP_DELAY_SECONDS
     continue
   }
@@ -175,8 +167,8 @@ while ($true) {
       continue
     }
 
-    $sunriseTime = [DateTime]::Parse($sunData.sunrise)
-    $sunsetTime = [DateTime]::Parse($sunData.sunset)
+    $sunriseTime = $sunData.sunrise
+    $sunsetTime = $sunData.sunset
 
     $first = $false
   }
