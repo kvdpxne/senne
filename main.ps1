@@ -15,6 +15,11 @@ $CITY = "Lublin"
 $CHECK_INTERVAL_SECONDS = 20  # Retry delay on API failure
 $LOOP_DELAY_SECONDS = 60  # Normal delay between checks
 
+$OFFESET = $true
+
+$SUNRISE_OFFSET = "0:30"
+$SUNSET_OFFSET = "-1:00"
+
 $GEOCODING_API = "https://nominatim.openstreetmap.org"
 $SUN_API = "https://api.sunrise-sunset.org"
 
@@ -182,6 +187,11 @@ while ($true) {
 
   $sunrise = $result.sunrise
   $sunset = $result.sunset
+
+  if ($OFFESET) {
+    $sunrise += [TimeSpan]$SUNRISE_OFFSET
+    $sunset += [TimeSpan]$SUNSET_OFFSET
+  }
 
   $start = $now
 }
