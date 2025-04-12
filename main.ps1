@@ -68,12 +68,12 @@ function Convert-UtcTimeToLocal {
 }
 
 function Get-SunsetSunriseData {
-  param ([string]$lat, [string]$lon, [string]$dateTime)
+  param ([string]$lat, [string]$lon, [System.DateTime]$date)
 
   try {
     Write-Information "[STATUS] Fetching sunrise/sunset times for Lat=$lat, Lon=$lon"
 
-    $formattedDate = Get-Date -Format "yyyy-MM-dd" $dateTime
+    $formattedDate = Get-Date -Format "yyyy-MM-dd" $date
     $url = "$SUN_API/json?lat=$lat&lng=$lon&date=$formattedDate"
     $response = Invoke-RestMethod -Uri $url -ErrorAction Stop
 
