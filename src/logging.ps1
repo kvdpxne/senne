@@ -28,10 +28,6 @@
     Write-Log -Message "Application started" -Level INFO
     Writes an informational message to all outputs.
 
-.EXAMPLE
-    Write-Log -Message "Disk space low" -Level WARN -ApplicationName "DiskMonitor"
-    Writes a warning with custom application name.
-
 .NOTES
     Requires administrative privileges to create new event sources.
     Console colors are only applied when running in interactive mode.
@@ -45,9 +41,6 @@ function Write-Log {
     [Parameter(Mandatory = $false)]
     [ValidateSet("INFO", "WARN", "ERROR", "DEBUG")]
     [string]$Level = "INFO",
-
-    [Parameter(Mandatory = $false)]
-    [string]$SourceName = "senne",
 
     [Parameter(Mandatory = $false)]
     [string]$LogName = "Application",
@@ -67,30 +60,39 @@ function Write-Log {
 
     # Create timestamp and formatted message
     $timestamp = Get-Date -Format $GOOD_FORMAT
-    $consoleMessage = "$timestamp $($Level.PadLeft(5)) : $Message"
+    $job = Get-Job
+    $jobName = if ($job) { $job.Name } else { "main" }
+
+    $consoleMessage = "$timestamp $($Level.PadLeft(5)) $PID --- [$jobName] : $Message"
+    $sourceName = "senne"
   }
 
   process {
     try {
       # Console output (only in interactive mode)
-      if ($host.UI.RawUI.WindowStyle -ne "Hidden") {
+      if ("Hidden" -ne $host.UI.RawUI.WindowStyle) {
         $color = $levelConfig[$Level].Color
         Write-Host $consoleMessage -ForegroundColor $color
       }
 
+      #
+      if ("DEBUG" -eq $Level) {
+        return
+      }
+
       # Ensure event source exists
-      if (-not [System.Diagnostics.EventLog]::SourceExists($SourceName)) {
+      if (-not [System.Diagnostics.EventLog]::SourceExists($sourceName)) {
         try {
-          [System.Diagnostics.EventLog]::CreateEventSource($SourceName, $LogName)
-          Write-Verbose "Created new EventLog source: $SourceName"
+          [System.Diagnostics.EventLog]::CreateEventSource($sourceName, $LogName)
+          Write-Verbose "Created new EventLog source: $sourceName"
         } catch {
-          Write-Warning "Failed to create EventLog source '$SourceName': $_"
+          Write-Warning "Failed to create EventLog source '$sourceName': $_"
           return
         }
       }
 
       try {
-        Write-EventLog -LogName $LogName -Source $SourceName -EntryType $levelConfig[$Level].Type -EventId $EventId -Message $Message -ErrorAction Stop
+        Write-EventLog -LogName $LogName -Source $sourceName -EntryType $levelConfig[$Level].Type -EventId $EventId -Message $Message -ErrorAction Stop
         Write-Verbose "Successfully logged [$Level] message to EventLog"
       } catch {
         Write-Warning "Failed to write to EventLog: $_"

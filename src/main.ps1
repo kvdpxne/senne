@@ -6,54 +6,80 @@ if ($workingDirectory -ne (Get-Location)) {
 . ./constants.ps1
 . ./fetch-geocoding-location-data.ps1
 . ./fetch-sun-times-data.ps1
+. ./get-current-weather.ps1
 . ./internet-connection-checker.ps1
 . ./logging.ps1
 . ./theme-changer.ps1
 
-<#
-.SYNOPSIS
-Automatically switches Windows theme between light/dark based on sunrise/sunset times.
-.DESCRIPTION
-- Fetches geographic coordinates for a given city (OpenStreetMap API).
-- Retrieves sunrise/sunset times (Sunrise-Sunset API).
-- Toggles Windows 10/11 theme at the correct times.
-- Runs in a loop with error handling and delays.
-#>
-
-# The name of the place or city location to be sent in the body of the request
-# to the service that converts the address to latitude and longitude.
-$CITY = "Lublin"
-
 $CHECK_INTERVAL_SECONDS = 20  # Retry delay on API failure
 $LOOP_DELAY_SECONDS = 60  # Normal delay between checks
+$DELAY_BWR = 16 * 60
 
 $OFFESET = $true
 
 $SUNRISE_OFFSET = "0:30"
 $SUNSET_OFFSET = "-1:00"
 
-# The date when the script was started
-$start = Get-Date -Format $GOOD_FORMAT
+# Nazwa miejsca lub miejscowości pobierana z pliku, która zostanie
+# przekonwertowana na długość i szerokość geograficzną
+$location = Get-Content "./location.txt" -Encoding "UTF8"
 
-# The longitude and latitude of the defined city
+# Czas uruchomienia skryptu, później czas ostatniej aktualizacji czasu wschodu
+# i zachodu słońca (czas iteracji)
+$when = Get-Date -Format $GOOD_FORMAT
+
+# Czas ostatniej odpowiedzi na żądanie o uzyskanie aktualnej pogody
+$last = $null
+
+# Długość i szerokość geograficzna
 $longitude = $null
 $latitude = $null
 
-# The time of sunrise and sunset
+# Czas wschodu i zachodu słońca
 $sunrise = $null
 $sunset = $null
 
+# Poziom zachmurzenia w procentach
+$cloudy = 0
+
 Write-Log "The powershell script named 'senna' was run correctly."
-Write-Log "The start time was set as: '$start' and the location was set to: '$CITY'."
+Write-Log "The start time was set as: '$when' and the location was set to: '$location'."
 
 while ($true) {
+  # Czas aktualnie wykonywanej iteracji
   $now = Get-Date
-  $before = $sunrise -and $sunset
 
-  if ($before -and $now.DayOfYear -eq $start.DayOfYear -and $now.Year -eq $start.Year) {
-    Set-WindowsTheme -UseLightTheme ($now -ge $sunrise -and $now -lt $sunset)
-    Start-Sleep -Seconds $LOOP_DELAY_SECONDS
-    continue
+  # Sprawdza, czy czas wschodu i zachodu słońca jest zdefiniowany
+  if ($sunrise -and $sunset) {
+    # Określa, czy aktualnie jest dzień (z uwzględniemiem przesunięcia)
+    $day = $now -ge $sunrise -and $now -lt $sunset
+
+    # Sprawdza, czy aktualnie jest dzień (z uwzględniemiem przesunięcia) oraz
+    # czy jest to pierwsze żadanie lub czy mineło wystarczająco wiele czasu od
+    # ostatniego żadania
+    if ($day -and (-not $last -or $DELAY_BWR -le ($now - $last).TotalSeconds)) {
+      if (-not (Test-InternetConnection -RetryCount 3 -Quiet)) {
+        Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
+        continue
+      }
+
+      $result = Get-CurrentWeather -Latitude $latitude -Longitude $longitude
+      if (-not $result) {
+        Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
+        continue
+      }
+
+      $cloudy = $result.Code
+      $last = $now
+    }
+
+    # Sprawdza, czy czas wschodu i zachodu słońca został uaktualniony w innym
+    # dniu niż obecny dzień otrzymany z czasu iteracji
+    if ($now.DayOfYear -eq $when.DayOfYear) {
+      Set-WindowsTheme -UseLightTheme ($day -and 75 -gt $cloudy)
+      Start-Sleep -Seconds $LOOP_DELAY_SECONDS
+      continue
+    }
   }
 
   if (-not (Test-InternetConnection -RetryCount 3)) {
@@ -62,7 +88,7 @@ while ($true) {
   }
 
   if (-not $longitude -or -not $latitude) {
-    $result = Get-Geocoding-Location-Data -Location $CITY
+    $result = Get-Geocoding-Location-Data -Location $location
     if (-not $result) {
       Start-Sleep -Seconds $CHECK_INTERVAL_SECONDS
       continue
@@ -86,5 +112,7 @@ while ($true) {
     $sunset += [TimeSpan]$SUNSET_OFFSET
   }
 
-  $start = $now
+  # Ustawia czas ostatniej aktualizacji czasu wschodu i zachodu słońca na czas
+  # aktualnie wykonywanej iteracji
+  $when = $now
 }
