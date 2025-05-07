@@ -1,7 +1,5 @@
 . ./logging.ps1
 
-$GEOCODING_API = "https://nominatim.openstreetmap.org"
-
 <#
 .SYNOPSIS
     Retrieves geocoding data (latitude/longitude) for a specified location.

@@ -1,8 +1,6 @@
 . ./datetime-converter.ps1
 . ./logging.ps1
 
-$SUN_API = "https://api.sunrise-sunset.org"
-
 <#
 .SYNOPSIS
     Retrieves sunrise and sunset times for a specific location and date.

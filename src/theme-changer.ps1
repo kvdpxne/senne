@@ -12,16 +12,9 @@
 .PARAMETER Force
     When specified, applies the theme even if it's already set to the requested mode.
 
-.PARAMETER RestartExplorer
-    When specified, restarts Windows Explorer to apply changes immediately.
-
 .EXAMPLE
     Set-WindowsTheme -UseLightTheme $true
     Switches to light theme if not already set.
-
-.EXAMPLE
-    Set-WindowsTheme -UseLightTheme $false -RestartExplorer
-    Switches to dark theme and restarts Explorer for immediate effect.
 
 .EXAMPLE
     Set-WindowsTheme -UseLightTheme $true -Force
@@ -38,10 +31,7 @@ function Set-WindowsTheme {
     [bool]$UseLightTheme,
 
     [Parameter(Mandatory=$false)]
-    [switch]$Force,
-
-    [Parameter(Mandatory=$false)]
-    [switch]$RestartExplorer
+    [switch]$Force
   )
 
   begin {
@@ -80,17 +70,6 @@ function Set-WindowsTheme {
       Set-ItemProperty -Path $themePath -Name $systemValue -Value $desiredValue -ErrorAction Stop
 
       Write-Log "Theme successfully applied"
-
-      # Restart Explorer if requested
-      if ($RestartExplorer) {
-        try {
-          Write-Verbose "Restarting Windows Explorer..."
-          Stop-Process -Name "explorer" -Force -ErrorAction Stop
-          Write-Verbose "Windows Explorer restarted"
-        } catch {
-          Write-Warning "Failed to restart Windows Explorer: $_"
-        }
-      }
     } catch [System.Security.SecurityException] {
       Write-Error "[PERMISSION ERROR] Access denied. Try running as Administrator: $_"
     } catch [System.Exception] {
